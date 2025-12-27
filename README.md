@@ -5,6 +5,7 @@ A powerful Node.js CLI tool that batch processes videos to extract every individ
 ## Features
 
 - 🎬 **Batch Processing** - Process multiple videos in one command
+- ⚡ **Parallel Processing** - Process multiple videos simultaneously for faster extraction
 - 📁 **Organized Output** - Each video gets its own subfolder
 - 🖼️ **High-Quality PNGs** - Configurable compression levels
 - 🔢 **Sequential Naming** - Frames are named sequentially (e.g., `frame_000001.png`)
@@ -84,6 +85,7 @@ video-frame-extractor -i /path/to/videos -o /path/to/output
 | `--fps` | | Extract at specific FPS | All frames |
 | `--start` | | Start time (HH:MM:SS or seconds) | Beginning |
 | `--end` | | End time (HH:MM:SS or seconds) | End |
+| `--concurrency` | `-c` | Number of videos to process in parallel | `auto` (CPU cores/2) |
 | `--dry-run` | | Preview without extracting | `false` |
 | `--verbose` | `-v` | Enable detailed output | `false` |
 | `--help` | `-h` | Show help | |
@@ -103,6 +105,12 @@ vfe -i ./videos -o ./frames --start 10 --end 30
 
 # Extract only from MP4 and MOV files
 vfe -i ./videos -o ./frames -e mp4,mov
+
+# Process 5 videos in parallel (for faster extraction)
+vfe -i ./videos -o ./frames -c 5
+
+# Process 8 videos in parallel with reduced quality for speed
+vfe -i ./videos -o ./frames -c 8 -q 9
 
 # Custom filename pattern (8 digits)
 vfe -i ./videos -o ./frames -f "img_%08d.png"
@@ -154,10 +162,14 @@ Add more formats using the `-e` option.
 
 ## Performance Tips
 
-1. **SSD Storage** - Use SSD for output directory for faster writes
-2. **Lower FPS** - Use `--fps 1` to extract fewer frames if you don't need every frame
-3. **Time Range** - Use `--start` and `--end` to limit extraction
-4. **Higher Compression** - Use `-q 9` for smaller files and faster processing
+1. **Parallel Processing** - Use `-c` to process multiple videos simultaneously
+   - Auto mode uses half your CPU cores by default
+   - For 10 videos, try `-c 5` or `-c 10` based on your system
+   - More parallelism = faster overall, but uses more CPU/RAM
+2. **SSD Storage** - Use SSD for output directory for faster writes
+3. **Lower FPS** - Use `--fps 1` to extract fewer frames if you don't need every frame
+4. **Time Range** - Use `--start` and `--end` to limit extraction
+5. **Higher Compression** - Use `-q 9` for smaller files and faster processing
 
 ## Error Handling
 

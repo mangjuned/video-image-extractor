@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const chalk = require('chalk');
 const ora = require('ora');
 const { getVideoDuration, formatDuration, sanitizeFilename } = require('./utils');
@@ -133,6 +134,117 @@ function countExtractedFrames(directory) {
 }
 
 /**
+ * Process a single video and return result
+ */
+async function processSingleVideo(video, index, total, outputDir, options) {
+    const videoOutputDir = path.join(outputDir, sanitizeFilename(video.name));
+    const startTime = Date.now();
+
+    // Create output subdirectory
+    if (!fs.existsSync(videoOutputDir)) {
+        fs.mkdirSync(videoOutputDir, { recursive: true });
+    }
+
+    try {
+        // Get video duration
+        const duration = await getVideoDuration(video.path);
+
+        await extractFrames(video.path, videoOutputDir, {
+            quality: options.quality,
+            format: options.format,
+            fps: options.fps,
+            startTime: options.startTime,
+            endTime: options.endTime,
+            verbose: options.verbose
+        });
+
+        const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+        const frameCount = countExtractedFrames(videoOutputDir);
+
+        return {
+            success: true,
+            video,
+            index,
+            frameCount,
+            elapsedTime,
+            duration,
+            outputDir: videoOutputDir
+        };
+    } catch (error) {
+        return {
+            success: false,
+            video,
+            index,
+            error: error.message,
+            outputDir: videoOutputDir
+        };
+    }
+}
+
+/**
+ * Process videos in parallel batches
+ */
+async function processVideosParallel(videos, outputDir, options, concurrency) {
+    const results = [];
+    let completed = 0;
+    let successCount = 0;
+    let failCount = 0;
+    let totalFrames = 0;
+
+    // Process in batches
+    for (let i = 0; i < videos.length; i += concurrency) {
+        const batch = videos.slice(i, Math.min(i + concurrency, videos.length));
+        const batchNumber = Math.floor(i / concurrency) + 1;
+        const totalBatches = Math.ceil(videos.length / concurrency);
+
+        console.log(chalk.blue(`\n🔄 Processing batch ${batchNumber}/${totalBatches} (${batch.length} video${batch.length > 1 ? 's' : ''} in parallel)`));
+        console.log(chalk.gray(`   Videos: ${batch.map(v => v.name).join(', ')}`));
+
+        const spinner = ora({
+            text: `Extracting frames from ${batch.length} video(s)...`,
+            color: 'cyan'
+        }).start();
+
+        const batchStartTime = Date.now();
+
+        // Process batch in parallel
+        const batchPromises = batch.map((video, batchIndex) =>
+            processSingleVideo(
+                video,
+                i + batchIndex,
+                videos.length,
+                outputDir,
+                options
+            )
+        );
+
+        const batchResults = await Promise.all(batchPromises);
+
+        const batchTime = ((Date.now() - batchStartTime) / 1000).toFixed(2);
+        spinner.stop();
+
+        // Process results
+        for (const result of batchResults) {
+            completed++;
+            results.push(result);
+
+            if (result.success) {
+                successCount++;
+                totalFrames += result.frameCount;
+                console.log(chalk.green(`   ✔ ${result.video.name}: ${result.frameCount} frames in ${result.elapsedTime}s`));
+            } else {
+                failCount++;
+                console.log(chalk.red(`   ✖ ${result.video.name}: ${result.error}`));
+            }
+        }
+
+        console.log(chalk.gray(`   Batch completed in ${batchTime}s`));
+    }
+
+    return { results, successCount, failCount, totalFrames };
+}
+
+/**
  * Process all videos in the input directory
  */
 async function processVideos(config) {
@@ -146,8 +258,13 @@ async function processVideos(config) {
         startTime,
         endTime,
         dryRun,
-        verbose
+        verbose,
+        concurrency: userConcurrency
     } = config;
+
+    // Determine concurrency
+    const cpuCount = os.cpus().length;
+    const defaultConcurrency = Math.max(1, Math.floor(cpuCount / 2)); // Use half of CPU cores by default
 
     // Find all video files
     const spinner = ora('Scanning for video files...').start();
@@ -160,6 +277,13 @@ async function processVideos(config) {
         return;
     }
 
+    // Determine actual concurrency (can't be more than number of videos)
+    let concurrency = userConcurrency === 'auto'
+        ? Math.min(defaultConcurrency, videos.length)
+        : Math.min(parseInt(userConcurrency, 10) || defaultConcurrency, videos.length);
+
+    concurrency = Math.max(1, concurrency); // At least 1
+
     console.log(chalk.green(`✔ Found ${videos.length} video file(s)\n`));
 
     // Display video list
@@ -167,6 +291,13 @@ async function processVideos(config) {
     videos.forEach((video, index) => {
         console.log(chalk.gray(`   ${index + 1}. ${video.name}.${video.extension} (${formatFileSize(video.size)})`));
     });
+    console.log('');
+
+    // Display parallelism info
+    console.log(chalk.magenta(`⚡ Parallel Processing:`));
+    console.log(chalk.gray(`   CPU cores:     ${cpuCount}`));
+    console.log(chalk.gray(`   Concurrency:   ${concurrency} video(s) at a time`));
+    console.log(chalk.gray(`   Total batches: ${Math.ceil(videos.length / concurrency)}`));
     console.log('');
 
     if (dryRun) {
@@ -184,66 +315,19 @@ async function processVideos(config) {
         return;
     }
 
-    // Process each video
-    let successCount = 0;
-    let failCount = 0;
-    let totalFrames = 0;
     const startTotalTime = Date.now();
 
-    for (let i = 0; i < videos.length; i++) {
-        const video = videos[i];
-        const videoOutputDir = path.join(outputDir, sanitizeFilename(video.name));
-
-        console.log(chalk.blue(`\n[${i + 1}/${videos.length}] Processing: ${chalk.white(video.name)}.${video.extension}`));
-
-        // Get video duration
-        const duration = await getVideoDuration(video.path);
-        if (duration) {
-            console.log(chalk.gray(`   Duration: ${formatDuration(duration)}`));
-        }
-
-        // Create output subdirectory
-        if (!fs.existsSync(videoOutputDir)) {
-            fs.mkdirSync(videoOutputDir, { recursive: true });
-        }
-
-        const extractSpinner = ora({
-            text: 'Extracting frames...',
-            color: 'cyan'
-        }).start();
-
-        const startTime_local = Date.now();
-
-        try {
-            await extractFrames(video.path, videoOutputDir, {
-                quality,
-                format,
-                fps,
-                startTime,
-                endTime,
-                verbose
-            });
-
-            const elapsedTime = ((Date.now() - startTime_local) / 1000).toFixed(2);
-            const frameCount = countExtractedFrames(videoOutputDir);
-            totalFrames += frameCount;
-
-            extractSpinner.succeed(
-                chalk.green(`Extracted ${chalk.white(frameCount)} frames in ${elapsedTime}s → ${chalk.gray(videoOutputDir)}`)
-            );
-            successCount++;
-        } catch (error) {
-            extractSpinner.fail(chalk.red(`Failed: ${error.message}`));
-            failCount++;
-
-            if (verbose) {
-                console.error(chalk.gray(error.stack));
-            }
-        }
-    }
+    // Process videos in parallel
+    const { successCount, failCount, totalFrames } = await processVideosParallel(
+        videos,
+        outputDir,
+        { quality, format, fps, startTime, endTime, verbose },
+        concurrency
+    );
 
     // Summary
     const totalTime = ((Date.now() - startTotalTime) / 1000).toFixed(2);
+    const avgTimePerVideo = (parseFloat(totalTime) / videos.length).toFixed(2);
 
     console.log(chalk.blue('\n═══════════════════════════════════════════════════════════'));
     console.log(chalk.blue('📊 Summary'));
@@ -254,7 +338,9 @@ async function processVideos(config) {
         console.log(chalk.red(`   Failed:           ${failCount}`));
     }
     console.log(chalk.cyan(`   Total frames:     ${totalFrames}`));
+    console.log(chalk.magenta(`   Concurrency:      ${concurrency}x parallel`));
     console.log(chalk.gray(`   Total time:       ${totalTime}s`));
+    console.log(chalk.gray(`   Avg per video:    ${avgTimePerVideo}s`));
     console.log(chalk.gray(`   Output directory: ${outputDir}`));
     console.log('');
 
