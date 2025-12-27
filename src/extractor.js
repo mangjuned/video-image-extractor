@@ -132,7 +132,6 @@ function countExtractedFrames(directory) {
         return 0;
     }
 }
-
 /**
  * Process a single video and return result
  */
@@ -141,6 +140,23 @@ async function processSingleVideo(video, index, total, outputDir, options) {
     const sanitizedName = sanitizeFilename(video.name);
     const videoOutputDir = path.join(outputDir, sanitizedName);
     const startTime = Date.now();
+
+    // Check cache: if frames already exist and --force is not set, skip
+    if (!options.force) {
+        const existingFrames = countExtractedFrames(videoOutputDir);
+        if (existingFrames > 0) {
+            return {
+                success: true,
+                cached: true,
+                video,
+                index,
+                frameCount: existingFrames,
+                elapsedTime: '0.00',
+                duration: null,
+                outputDir: videoOutputDir
+            };
+        }
+    }
 
     // Create output subdirectory with retry for network filesystems (like Google Drive)
     const maxRetries = 3;
@@ -183,6 +199,7 @@ async function processSingleVideo(video, index, total, outputDir, options) {
 
         return {
             success: true,
+            cached: false,
             video,
             index,
             frameCount,
@@ -193,6 +210,7 @@ async function processSingleVideo(video, index, total, outputDir, options) {
     } catch (error) {
         return {
             success: false,
+            cached: false,
             video,
             index,
             error: error.message,
@@ -208,6 +226,7 @@ async function processVideosParallel(videos, outputDir, options, concurrency) {
     const results = [];
     let completed = 0;
     let successCount = 0;
+    let cachedCount = 0;
     let failCount = 0;
     let totalFrames = 0;
     const quiet = options.quiet || false;
@@ -245,10 +264,17 @@ async function processVideosParallel(videos, outputDir, options, concurrency) {
             results.push(result);
 
             if (result.success) {
-                successCount++;
                 totalFrames += result.frameCount;
-                if (!quiet) {
-                    console.log(`  ✔ ${result.video.name}: ${result.frameCount} frames`);
+                if (result.cached) {
+                    cachedCount++;
+                    if (!quiet) {
+                        console.log(`  ⏭ ${result.video.name}: ${result.frameCount} frames (cached)`);
+                    }
+                } else {
+                    successCount++;
+                    if (!quiet) {
+                        console.log(`  ✔ ${result.video.name}: ${result.frameCount} frames`);
+                    }
                 }
             } else {
                 failCount++;
@@ -261,7 +287,7 @@ async function processVideosParallel(videos, outputDir, options, concurrency) {
         }
     }
 
-    return { results, successCount, failCount, totalFrames };
+    return { results, successCount, cachedCount, failCount, totalFrames };
 }
 
 /**
@@ -280,6 +306,7 @@ async function processVideos(config) {
         dryRun,
         verbose,
         quiet,
+        force,
         concurrency: userConcurrency
     } = config;
 
@@ -316,17 +343,18 @@ async function processVideos(config) {
     const startTotalTime = Date.now();
 
     // Process videos in parallel
-    const { successCount, failCount, totalFrames } = await processVideosParallel(
+    const { successCount, cachedCount, failCount, totalFrames } = await processVideosParallel(
         videos,
         outputDir,
-        { quality, format, fps, startTime, endTime, verbose, quiet },
+        { quality, format, fps, startTime, endTime, verbose, quiet, force },
         concurrency
     );
 
     // Summary
     const totalTime = ((Date.now() - startTotalTime) / 1000).toFixed(2);
+    const cachedStr = cachedCount > 0 ? `, ${cachedCount} cached` : '';
 
-    console.log(`\nDone: ${successCount} succeeded, ${failCount} failed, ${totalFrames} frames in ${totalTime}s`);
+    console.log(`\nDone: ${successCount} extracted${cachedStr}, ${failCount} failed, ${totalFrames} frames in ${totalTime}s`);
 }
 
 /**
@@ -344,6 +372,7 @@ async function processVideosFromList(config) {
         dryRun,
         verbose,
         quiet,
+        force,
         concurrency: userConcurrency
     } = config;
 
@@ -377,17 +406,18 @@ async function processVideosFromList(config) {
     const startTotalTime = Date.now();
 
     // Process videos in parallel
-    const { successCount, failCount, totalFrames } = await processVideosParallel(
+    const { successCount, cachedCount, failCount, totalFrames } = await processVideosParallel(
         videos,
         outputDir,
-        { quality, format, fps, startTime, endTime, verbose, quiet },
+        { quality, format, fps, startTime, endTime, verbose, quiet, force },
         concurrency
     );
 
     // Summary
     const totalTime = ((Date.now() - startTotalTime) / 1000).toFixed(2);
+    const cachedStr = cachedCount > 0 ? `, ${cachedCount} cached` : '';
 
-    console.log(`\nDone: ${successCount} succeeded, ${failCount} failed, ${totalFrames} frames in ${totalTime}s`);
+    console.log(`\nDone: ${successCount} extracted${cachedStr}, ${failCount} failed, ${totalFrames} frames in ${totalTime}s`);
 }
 
 module.exports = {

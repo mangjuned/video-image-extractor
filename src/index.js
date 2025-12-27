@@ -41,6 +41,7 @@ program
     .option('--dry-run', 'Show what would be processed without actually extracting', false)
     .option('-v, --verbose', 'Enable verbose output', false)
     .option('--quiet', 'Minimal output (recommended for Colab)', false)
+    .option('--force', 'Force re-extraction even if frames already exist (ignore cache)', false)
     .parse(process.argv);
 
 const options = program.opts();
@@ -242,7 +243,8 @@ async function main() {
                 concurrency,
                 dryRun: options.dryRun,
                 verbose: options.verbose,
-                quiet: options.quiet
+                quiet: options.quiet,
+                force: options.force
             });
         } else {
             // Process local directory
@@ -258,7 +260,8 @@ async function main() {
                 concurrency,
                 dryRun: options.dryRun,
                 verbose: options.verbose,
-                quiet: options.quiet
+                quiet: options.quiet,
+                force: options.force
             });
         }
 
