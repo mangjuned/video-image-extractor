@@ -5,6 +5,13 @@ node_modules/
 output/
 frames/
 extracted/
+downloads/
+
+# Google Drive credentials (IMPORTANT: never commit these!)
+credentials.json
+*-credentials.json
+*.credentials.json
+service-account*.json
 
 # OS files
 .DS_Store
