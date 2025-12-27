@@ -40,12 +40,15 @@ program
     .option('--delete-after-upload', 'Delete local files after successful upload to Google Drive', false)
     .option('--dry-run', 'Show what would be processed without actually extracting', false)
     .option('-v, --verbose', 'Enable verbose output', false)
+    .option('--quiet', 'Minimal output (recommended for Colab)', false)
     .parse(process.argv);
 
 const options = program.opts();
 
 async function main() {
-    console.log(banner);
+    if (!options.quiet) {
+        console.log(banner);
+    }
 
     // Validate that either input or urls is provided
     if (!options.input && !options.urls) {
@@ -238,7 +241,8 @@ async function main() {
                 endTime: options.end,
                 concurrency,
                 dryRun: options.dryRun,
-                verbose: options.verbose
+                verbose: options.verbose,
+                quiet: options.quiet
             });
         } else {
             // Process local directory
@@ -253,7 +257,8 @@ async function main() {
                 endTime: options.end,
                 concurrency,
                 dryRun: options.dryRun,
-                verbose: options.verbose
+                verbose: options.verbose,
+                quiet: options.quiet
             });
         }
 
