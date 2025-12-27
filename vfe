@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Wrapper script to run the video frame extractor
+# This clears NODE_OPTIONS to avoid ESM preload issues with Node.js 22+
+
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Run the CLI with cleared NODE_OPTIONS
+unset NODE_OPTIONS
+exec node "$SCRIPT_DIR/src/index.js" "$@"

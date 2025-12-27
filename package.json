@@ -1,0 +1,33 @@
+{
+    "name": "video-frame-extractor",
+    "version": "1.0.0",
+    "description": "CLI tool to extract frames from videos as high-quality PNGs using ffmpeg",
+    "main": "src/index.js",
+    "bin": {
+        "vfe": "./src/index.js",
+        "video-frame-extractor": "./src/index.js"
+    },
+    "scripts": {
+        "start": "./vfe",
+        "extract": "./vfe",
+        "test": "./vfe --help"
+    },
+    "keywords": [
+        "video",
+        "frame",
+        "extractor",
+        "ffmpeg",
+        "cli",
+        "png"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "chalk": "^4.1.2",
+        "commander": "^11.1.0",
+        "ora": "^5.4.1"
+    },
+    "engines": {
+        "node": ">=14.0.0"
+    }
+}
