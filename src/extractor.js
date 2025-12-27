@@ -137,15 +137,42 @@ function countExtractedFrames(directory) {
  * Process a single video and return result
  */
 async function processSingleVideo(video, index, total, outputDir, options) {
-    const videoOutputDir = path.join(outputDir, sanitizeFilename(video.name));
+    // Sanitize the video name properly (handles URL-encoded names)
+    const sanitizedName = sanitizeFilename(video.name);
+    const videoOutputDir = path.join(outputDir, sanitizedName);
     const startTime = Date.now();
 
-    // Create output subdirectory
-    if (!fs.existsSync(videoOutputDir)) {
-        fs.mkdirSync(videoOutputDir, { recursive: true });
+    // Create output subdirectory with retry for network filesystems (like Google Drive)
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            if (!fs.existsSync(videoOutputDir)) {
+                fs.mkdirSync(videoOutputDir, { recursive: true });
+            }
+            // Verify directory was created
+            if (fs.existsSync(videoOutputDir)) {
+                break;
+            }
+        } catch (err) {
+            if (attempt === maxRetries) {
+                throw new Error(`Failed to create output directory after ${maxRetries} attempts: ${err.message}`);
+            }
+            // Wait a bit before retry (helps with network filesystems)
+            await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+        }
     }
 
+    // Small delay to prevent race conditions with parallel writes to network drives
+    await new Promise(resolve => setTimeout(resolve, 100 * index));
+
     try {
+        // Log folder info in verbose mode
+        if (options.verbose) {
+            console.log(chalk.gray(`      Original: ${video.name}`));
+            console.log(chalk.gray(`      Sanitized: ${sanitizedName}`));
+            console.log(chalk.gray(`      Output dir: ${videoOutputDir}`));
+        }
+
         // Get video duration
         const duration = await getVideoDuration(video.path);
 

@@ -80,6 +80,34 @@ vfe -i ./videos -o ./output
 npm install -g video-frame-extractor
 ```
 
+### Google Colab Installation
+
+In Google Colab, you can save frames directly to Google Drive without API credentials!
+
+**Important:** You need Node.js 16+ for this tool. Colab's default is too old.
+
+**Quick Start:**
+```python
+# Mount Google Drive
+from google.colab import drive
+drive.mount('/content/drive')
+
+# Install Node.js 18 (required!)
+!curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+!sudo apt-get install -y nodejs ffmpeg
+!pip install -q yt-dlp
+
+# Clone and setup
+!git clone https://github.com/YOUR_USERNAME/video-frame-extractor.git
+%cd video-frame-extractor
+!npm install
+
+# Extract frames → Save directly to Google Drive!
+!node src/index.js -i /content/videos -o /content/drive/MyDrive/frames --fps 1
+```
+
+📓 **See `colab_notebook.ipynb` for a complete interactive notebook!**
+
 ## Usage
 
 ### Basic Usage

@@ -6,7 +6,7 @@ const fs = require('fs');
 const { processVideos, processVideosFromList } = require('./extractor');
 const { checkFfmpeg } = require('./utils');
 const { downloadAllVideos, checkYtDlp } = require('./downloader');
-const { uploadAllToGoogleDrive } = require('./gdrive');
+// Note: gdrive module is loaded lazily to avoid googleapis dependency issues on older Node.js
 const chalk = require('chalk');
 
 // ASCII art banner
@@ -259,6 +259,8 @@ async function main() {
 
         // Step 2: Upload to Google Drive (if enabled)
         if (options.uploadDrive && !options.dryRun) {
+            // Lazy load googleapis to avoid Node.js version issues when not using upload
+            const { uploadAllToGoogleDrive } = require('./gdrive');
             await uploadAllToGoogleDrive(
                 outputDir,
                 path.resolve(options.driveCredentials),
